@@ -23,6 +23,47 @@ public final class CriUtils {
     }
 
     /**
+     * 从 AWB 内音频提取到的参数（等价于 C# 侧解析预览 WAV 得到的采样信息）。
+     *
+     * @param sampleRate  采样率（Hz），如 44100/48000
+     * @param sampleCount 每声道样本数（HCA 解码总样本数，供 Length / NumSamples / 循环截断使用）
+     * @param channels    声道数
+     */
+    public record AudioSpec(int sampleRate, int sampleCount, int channels) {
+        /** 音频时长（秒）。 */
+        public float duration() {
+            return (float) sampleCount / (float) sampleRate;
+        }
+    }
+
+    /**
+     * 从 AWB 内 HCA 载荷提取音频参数（等同于把 AWB 音频“转成 WAV 后解析”得到的采样信息）。
+     * <p>
+     * HCA 解码总样本数 = frameCount × 1024 − encoderDelay − encoderPadding
+     * （对照 vgmstream clhca 的 sample_count 计算，已实测 music006000 → 5,754,864 与解码器一致）。
+     * 因 ACB 元数据（Length / NumSamples / 循环截断 / 采样率）只用采样率与样本数，无需实际 PCM 解码。
+     *
+     * @param awbPayload 规范化 AWB 的首个非空流（HCA 载荷）
+     * @return 音频参数
+     * @throws IOException 载荷不是可解析的 CRI keyed-HCA 时
+     */
+    public static AudioSpec extractAudioSpec(byte[] awbPayload) throws IOException {
+        AwbNormalizer.HcaParams p = AwbNormalizer.probeHca(awbPayload);
+        if (p == null) {
+            throw new IOException("AWB 内音频不是可解析的 CRI keyed-HCA（无法提取采样参数）。");
+        }
+        long samples = p.frameCount() * 1024L - p.encoderDelay() - p.encoderPadding();
+        if (samples <= 0) {
+            throw new IOException("AWB 内 HCA 样本数无效（frameCount=" + p.frameCount()
+                    + ", delay=" + p.encoderDelay() + ", padding=" + p.encoderPadding() + "）。");
+        }
+        if (samples > Integer.MAX_VALUE) {
+            throw new IOException("AWB 内 HCA 音频过长（" + samples + " 样本），超出支持范围。");
+        }
+        return new AudioSpec(p.sampleRate(), (int) samples, p.channels());
+    }
+
+    /**
      * 读取内置模板 templateV3.acb。
      */
     public static byte[] loadBundledTemplate() throws IOException {
@@ -65,9 +106,34 @@ public final class CriUtils {
     }
 
     /**
+     * 以采样参数直接生成 ACB（等价于 {@link #createAcbWithPreview(byte[], byte[], double, double)}
+     * 中传入一个与 AWB 音频完全一致的 PCM16 WAV）。
+     * <p>
+     * 参数可经 {@link #extractAudioSpec} 从 AWB 提取：本工具不做 HCA→PCM 解码，ACB 元数据所需的
+     * 采样率/样本数直接取自 HCA 头，数值与解码器输出完全一致。
+     */
+    public static byte[] createAcbWithPreview(int sampleRate, int sampleCount, byte[] awbBytes,
+                                              double loopStartSecond, double loopEndSecond,
+                                              Consumer<String> warningSink) throws IOException {
+        return createAcbWithPreview(sampleRate, sampleCount, awbBytes,
+                loopStartSecond, loopEndSecond, loadBundledTemplate(), warningSink);
+    }
+
+    /**
      * 核心实现：在给定模板字节上复刻 C# CreateAcbWithPreview 的全部字节语义。
      */
     private static byte[] createAcbWithPreview(byte[] wavBytes, byte[] awbBytes,
+                                               double loopStartSecond, double loopEndSecond,
+                                               byte[] templateAcb, Consumer<String> warningSink) {
+        WaveFile audioData = WaveFile.parse(wavBytes);
+        return createAcbWithPreview(audioData.sampleRate(), audioData.sampleCount(), awbBytes,
+                loopStartSecond, loopEndSecond, templateAcb, warningSink);
+    }
+
+    /**
+     * 核心实现：在给定模板字节上复刻 C# CreateAcbWithPreview 的全部字节语义。
+     */
+    private static byte[] createAcbWithPreview(int sampleRate, int sampleCount, byte[] awbBytes,
                                                double loopStartSecond, double loopEndSecond,
                                                byte[] templateAcb, Consumer<String> warningSink) {
         Consumer<String> warn = warningSink == null ? w -> {
@@ -75,19 +141,14 @@ public final class CriUtils {
         // SHA1(awb)
         byte[] sha1HashOfAwb = sha1(awbBytes);
 
-        // WaveReader / Pcm16Format
-        WaveFile audioData = WaveFile.parse(wavBytes);
-        int sampleRate = audioData.sampleRate();
-        int sampleCount = audioData.sampleCount();
-
         // 已知边界：官机对 NumSamples 字段为 0x00000000 的 ACB 拒绝读取音频并卡死
         // （对照实测：同 AWB 下官方输出 NumSamples 低字节 0xF0 可播、本输出 0x00 卡死）。
         // 按 C# 语义只写入 (byte)sampleCount，不改字节，但明确提示用户规避。
         if ((byte) sampleCount == 0) {
-            warn.accept("预览 WAV 总样本数 " + sampleCount
+            warn.accept("音频总样本数 " + sampleCount
                     + " 的低字节为 0x00：按 C# 语义 (byte)sampleCount 写出的 WaveformTable.NumSamples"
                     + " 将为 0x00000000。经官机对照实测，该字段为 0 会导致游戏拒读音频并卡死主进程。"
-                    + "请对 WAV 末尾裁剪/补零使总样本数 mod 256 != 0 后再生成"
+                    + "请对音频末尾裁剪/补零使总样本数 mod 256 != 0 后再生成"
                     + "（例如将 5,755,392 裁为 5,754,864 样本，与官方参考 track_right.acb 逐字节一致）。");
         }
 

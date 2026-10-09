@@ -2,7 +2,6 @@ package com.maiawb;
 
 import com.maiawb.core.AwbNormalizer;
 import com.maiawb.core.CriUtils;
-import com.maiawb.core.FfmpegAudioTool;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
@@ -33,12 +32,12 @@ import java.util.HexFormat;
 /**
  * ACB 预览生成器 —— 工业风格图形界面。
  * 用法一致地复刻 MaiChartManager 的 CreateAcbWithPreview：
- * AWB + 任意格式音频(经系统 ffmpeg 转码 WAV) + 循环区间 -> templateV3.acb -> 输出 ACB。
+ * 用户选择自己做好的 AWB → 从 AWB 内 HCA 提取音频参数（等价 WAV）→ templateV3.acb
+ * -> 输出 ACB + 配对规范化 AWB。无需也不接受音频文件输入。
  */
 public class MaiAwbApp extends Application {
 
     private final TextField awbField = new TextField();
-    private final TextField audioField = new TextField();
     private final TextField loopStartField = new TextField("10.0");
     private final TextField loopEndField = new TextField("15.0");
     private final Label loopStateLabel = new Label();
@@ -53,8 +52,6 @@ public class MaiAwbApp extends Application {
     public void start(Stage stage) {
         awbField.setPromptText("选择 AFS2 / AWB 音频容器（必选）");
         awbField.getStyleClass().add("field");
-        audioField.setPromptText("选择音频文件（wav/mp3/flac/ogg/m4a/opus…，需系统 ffmpeg）");
-        audioField.getStyleClass().add("field");
         loopStartField.getStyleClass().addAll("field", "field-num");
         loopEndField.getStyleClass().addAll("field", "field-num");
         // 回车即确认，修改数值后重新标记
@@ -79,7 +76,7 @@ public class MaiAwbApp extends Application {
         stage.show();
 
         generateButton.setOnAction(e -> onGenerate(stage));
-        log("就绪。等待输入 AWB 与音频文件（需系统 ffmpeg）。");
+        log("就绪。选择 AWB 音频文件与循环区间后生成 .acb + 配对 .awb。");
     }
 
     // ------------------------------------------------------------------
@@ -132,21 +129,6 @@ public class MaiAwbApp extends Application {
         });
         form.add(awbBrowse, 2, row);
         awbField.setEditable(true);
-
-        row++;
-        form.add(rowLabel("音频文件"), 0, row);
-        form.add(audioField, 1, row);
-        GridPane.setHgrow(audioField, Priority.ALWAYS);
-        Button audioBrowse = browseButton("浏览…", () -> {
-            File f = pickFile(stage(), "选择音频文件（任意格式，需系统 ffmpeg 转码）",
-                    "音频文件(*.wav;*.mp3;*.flac;*.ogg;*.m4a;*.aac;*.opus)", "*.*", lastDir());
-            if (f != null) {
-                audioField.setText(f.getAbsolutePath());
-                lastDir = f.getParentFile();
-                checkFfmpeg(f);
-            }
-        });
-        form.add(audioBrowse, 2, row);
 
         row++;
         form.add(rowLabel("循环区间"), 0, row);
@@ -226,11 +208,10 @@ public class MaiAwbApp extends Application {
 
     private void onGenerate(Stage stage) {
         String awbPath = awbField.getText().trim();
-        String audioPath = audioField.getText().trim();
 
-        if (awbPath.isEmpty() || audioPath.isEmpty()) {
-            flash("请先选择 AWB 与音频文件", true);
-            log("[错误] AWB 与音频文件均为必选输入。", true);
+        if (awbPath.isEmpty()) {
+            flash("请先选择 AWB 音频文件", true);
+            log("[错误] 请先选择 AWB 音频文件。", true);
             return;
         }
 
@@ -268,30 +249,15 @@ public class MaiAwbApp extends Application {
                 // 1) 规范化为官机 count=1 布局（音频位于流 id0），保证与模板 ACB 的 StreamAwbId=0 配对自洽
                 AwbNormalizer.Result norm = AwbNormalizer.normalize(awbBytes, w -> log("[警告] " + w, true));
 
-                // 2) 用系统 ffmpeg 把任意格式音频转码为 PCM16 WAV（采样率/声道与 AWB 内 HCA 对齐）
-                String ffmpeg = FfmpegAudioTool.findFfmpeg();
-                if (ffmpeg == null) {
-                    throw new IOException("未检测到系统 ffmpeg。\n" + FfmpegAudioTool.installGuidance());
-                }
-                AwbNormalizer.HcaParams hca = AwbNormalizer.probeHca(norm.payload());
-                int sampleRate = hca != null ? hca.sampleRate() : 44100;
-                int channels = hca != null ? hca.channels() : 2;
-                if (hca == null) {
-                    log("[警告] 无法从 AWB 读取 HCA 采样参数，按 44100 Hz / 立体声转码（官机模板默认）。", true);
-                }
-                Path tempWav = Files.createTempFile("maiawb_", ".wav");
-                try {
-                    FfmpegAudioTool.toWav(ffmpeg, Path.of(audioPath), sampleRate, channels, tempWav,
-                            w -> log("[提示] " + w, false));
-                    byte[] wavBytes = Files.readAllBytes(tempWav);
+                // 2) 从 AWB 内 HCA 提取音频参数（等价“提取 WAV”：采样率/样本数/时长，无需 PCM 解码）
+                CriUtils.AudioSpec spec = CriUtils.extractAudioSpec(norm.payload());
+                log(String.format("[音频] 已从 AWB 提取：%d Hz / %d 声道 / %d 样本 / %.3f s",
+                        spec.sampleRate(), spec.channels(), spec.sampleCount(), spec.duration()), false);
 
-                    // 3) 生成 ACB（模板固定内置 templateV3.acb）
-                    byte[] acb = CriUtils.createAcbWithPreview(wavBytes, norm.awb(), startSec, endSec,
-                            w -> log("[警告] " + w, true));
-                    return new GenResult(acb, norm);
-                } finally {
-                    Files.deleteIfExists(tempWav);
-                }
+                // 3) 生成 ACB（模板固定内置 templateV3.acb）
+                byte[] acb = CriUtils.createAcbWithPreview(spec.sampleRate(), spec.sampleCount(), norm.awb(),
+                        startSec, endSec, w -> log("[警告] " + w, true));
+                return new GenResult(acb, norm);
             }
         };
 
@@ -301,7 +267,7 @@ public class MaiAwbApp extends Application {
             byte[] acb = result.acb();
             AwbNormalizer.Result norm = result.norm();
             log("[信息] AWB 处理：" + norm.note(), false);
-            String suggested = suggestOutputName(audioPath);
+            String suggested = suggestOutputName(awbPath);
 
             FileChooser fc = new FileChooser();
             fc.setTitle("导出 ACB 文件");
@@ -346,30 +312,13 @@ public class MaiAwbApp extends Application {
 
     // ------------------------------------------------------------------
 
-    private String suggestOutputName(String audioPath) {
-        String name = Path.of(audioPath).getFileName().toString();
+    private String suggestOutputName(String awbPath) {
+        String name = Path.of(awbPath).getFileName().toString();
         int dot = name.lastIndexOf('.');
         if (dot > 0) {
             name = name.substring(0, dot);
         }
         return name + ".acb";
-    }
-
-    /** 选择音频后立即检测 ffmpeg：缺失时弹窗并给出安装引导，避免生成阶段才报错。 */
-    private void checkFfmpeg(File f) {
-        String ffmpeg = FfmpegAudioTool.findFfmpeg();
-        if (ffmpeg == null) {
-            log("[警告] 未检测到系统 ffmpeg，将无法转码音频：" + f.getName() + "。"
-                    + FfmpegAudioTool.installGuidance().replace("\n", " "), true);
-            javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
-            alert.setTitle("缺少 ffmpeg");
-            alert.setHeaderText("未检测到系统 ffmpeg");
-            alert.setContentText("本工具依赖系统 ffmpeg 把任意格式音频转码为 WAV。请先安装：\n\n"
-                    + FfmpegAudioTool.installGuidance());
-            alert.showAndWait();
-        } else {
-            log("[信息] 已检测到系统 ffmpeg：" + ffmpeg + "。", false);
-        }
     }
 
     /** 由保存的 out.acb 推导配对 AWB 路径（outBase.awb）。 */
