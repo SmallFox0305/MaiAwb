@@ -2,7 +2,7 @@ package com.maiawb;
 
 import com.maiawb.core.AwbNormalizer;
 import com.maiawb.core.CriUtils;
-import com.maiawb.core.WaveFile;
+import com.maiawb.core.FfmpegAudioTool;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
@@ -23,6 +23,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
@@ -32,12 +33,12 @@ import java.util.HexFormat;
 /**
  * ACB 预览生成器 —— 工业风格图形界面。
  * 用法一致地复刻 MaiChartManager 的 CreateAcbWithPreview：
- * AWB + WAV + 循环区间 -> templateV3.acb -> 输出 ACB。
+ * AWB + 任意格式音频(经系统 ffmpeg 转码 WAV) + 循环区间 -> templateV3.acb -> 输出 ACB。
  */
 public class MaiAwbApp extends Application {
 
     private final TextField awbField = new TextField();
-    private final TextField wavField = new TextField();
+    private final TextField audioField = new TextField();
     private final TextField loopStartField = new TextField("10.0");
     private final TextField loopEndField = new TextField("15.0");
     private final Label loopStateLabel = new Label();
@@ -52,8 +53,8 @@ public class MaiAwbApp extends Application {
     public void start(Stage stage) {
         awbField.setPromptText("选择 AFS2 / AWB 音频容器（必选）");
         awbField.getStyleClass().add("field");
-        wavField.setPromptText("选择 PCM16 WAV 预览音频（必选）");
-        wavField.getStyleClass().add("field");
+        audioField.setPromptText("选择音频文件（wav/mp3/flac/ogg/m4a/opus…，需系统 ffmpeg）");
+        audioField.getStyleClass().add("field");
         loopStartField.getStyleClass().addAll("field", "field-num");
         loopEndField.getStyleClass().addAll("field", "field-num");
         // 回车即确认，修改数值后重新标记
@@ -78,7 +79,7 @@ public class MaiAwbApp extends Application {
         stage.show();
 
         generateButton.setOnAction(e -> onGenerate(stage));
-        log("就绪。等待输入 AWB 与 WAV 文件。");
+        log("就绪。等待输入 AWB 与音频文件（需系统 ffmpeg）。");
     }
 
     // ------------------------------------------------------------------
@@ -133,18 +134,19 @@ public class MaiAwbApp extends Application {
         awbField.setEditable(true);
 
         row++;
-        form.add(rowLabel("WAV 文件"), 0, row);
-        form.add(wavField, 1, row);
-        GridPane.setHgrow(wavField, Priority.ALWAYS);
-        Button wavBrowse = browseButton("浏览…", () -> {
-            File f = pickFile(stage(), "选择 PCM16 WAV 预览音频", "WAV 音频(*.wav)", "*.wav", lastDir());
+        form.add(rowLabel("音频文件"), 0, row);
+        form.add(audioField, 1, row);
+        GridPane.setHgrow(audioField, Priority.ALWAYS);
+        Button audioBrowse = browseButton("浏览…", () -> {
+            File f = pickFile(stage(), "选择音频文件（任意格式，需系统 ffmpeg 转码）",
+                    "音频文件(*.wav;*.mp3;*.flac;*.ogg;*.m4a;*.aac;*.opus)", "*.*", lastDir());
             if (f != null) {
-                wavField.setText(f.getAbsolutePath());
+                audioField.setText(f.getAbsolutePath());
                 lastDir = f.getParentFile();
-                inspectWav(f);
+                checkFfmpeg(f);
             }
         });
-        form.add(wavBrowse, 2, row);
+        form.add(audioBrowse, 2, row);
 
         row++;
         form.add(rowLabel("循环区间"), 0, row);
@@ -172,8 +174,6 @@ public class MaiAwbApp extends Application {
         confirmLoopBtn.setTooltip(new javafx.scene.control.Tooltip("校验并应用当前循环区间（回车亦可）"));
         confirmLoopBtn.setOnAction(e -> onConfirmLoop());
         loopActions.getChildren().add(confirmLoopBtn);
-        Button resumeBtn = browseButton("从 WAV 提取时长", () -> useWavDuration());
-        loopActions.getChildren().add(resumeBtn);
         form.add(loopActions, 2, row);
 
         inputPanel.getChildren().addAll(inputTitle, form);
@@ -226,11 +226,11 @@ public class MaiAwbApp extends Application {
 
     private void onGenerate(Stage stage) {
         String awbPath = awbField.getText().trim();
-        String wavPath = wavField.getText().trim();
+        String audioPath = audioField.getText().trim();
 
-        if (awbPath.isEmpty() || wavPath.isEmpty()) {
-            flash("请先选择 AWB 与 WAV 文件", true);
-            log("[错误] AWB 与 WAV 均为必选输入。", true);
+        if (awbPath.isEmpty() || audioPath.isEmpty()) {
+            flash("请先选择 AWB 与音频文件", true);
+            log("[错误] AWB 与音频文件均为必选输入。", true);
             return;
         }
 
@@ -251,13 +251,11 @@ public class MaiAwbApp extends Application {
         }
 
         byte[] awbBytes;
-        byte[] wavBytes;
         try {
             awbBytes = Files.readAllBytes(Path.of(awbPath));
-            wavBytes = Files.readAllBytes(Path.of(wavPath));
         } catch (Exception ex) {
-            flash("读取文件失败", true);
-            log("[错误] 读取输入文件失败：" + ex.getMessage(), true);
+            flash("读取 AWB 失败", true);
+            log("[错误] 读取 AWB 失败：" + ex.getMessage(), true);
             return;
         }
 
@@ -269,10 +267,31 @@ public class MaiAwbApp extends Application {
             protected GenResult call() throws Exception {
                 // 1) 规范化为官机 count=1 布局（音频位于流 id0），保证与模板 ACB 的 StreamAwbId=0 配对自洽
                 AwbNormalizer.Result norm = AwbNormalizer.normalize(awbBytes, w -> log("[警告] " + w, true));
-                // 2) 生成 ACB（模板固定内置 templateV3.acb）
-                byte[] acb = CriUtils.createAcbWithPreview(wavBytes, norm.awb(), startSec, endSec,
-                        w -> log("[警告] " + w, true));
-                return new GenResult(acb, norm);
+
+                // 2) 用系统 ffmpeg 把任意格式音频转码为 PCM16 WAV（采样率/声道与 AWB 内 HCA 对齐）
+                String ffmpeg = FfmpegAudioTool.findFfmpeg();
+                if (ffmpeg == null) {
+                    throw new IOException("未检测到系统 ffmpeg。\n" + FfmpegAudioTool.installGuidance());
+                }
+                AwbNormalizer.HcaParams hca = AwbNormalizer.probeHca(norm.payload());
+                int sampleRate = hca != null ? hca.sampleRate() : 44100;
+                int channels = hca != null ? hca.channels() : 2;
+                if (hca == null) {
+                    log("[警告] 无法从 AWB 读取 HCA 采样参数，按 44100 Hz / 立体声转码（官机模板默认）。", true);
+                }
+                Path tempWav = Files.createTempFile("maiawb_", ".wav");
+                try {
+                    FfmpegAudioTool.toWav(ffmpeg, Path.of(audioPath), sampleRate, channels, tempWav,
+                            w -> log("[提示] " + w, false));
+                    byte[] wavBytes = Files.readAllBytes(tempWav);
+
+                    // 3) 生成 ACB（模板固定内置 templateV3.acb）
+                    byte[] acb = CriUtils.createAcbWithPreview(wavBytes, norm.awb(), startSec, endSec,
+                            w -> log("[警告] " + w, true));
+                    return new GenResult(acb, norm);
+                } finally {
+                    Files.deleteIfExists(tempWav);
+                }
             }
         };
 
@@ -282,7 +301,7 @@ public class MaiAwbApp extends Application {
             byte[] acb = result.acb();
             AwbNormalizer.Result norm = result.norm();
             log("[信息] AWB 处理：" + norm.note(), false);
-            String suggested = suggestOutputName(wavPath);
+            String suggested = suggestOutputName(audioPath);
 
             FileChooser fc = new FileChooser();
             fc.setTitle("导出 ACB 文件");
@@ -327,13 +346,30 @@ public class MaiAwbApp extends Application {
 
     // ------------------------------------------------------------------
 
-    private String suggestOutputName(String wavPath) {
-        String name = Path.of(wavPath).getFileName().toString();
+    private String suggestOutputName(String audioPath) {
+        String name = Path.of(audioPath).getFileName().toString();
         int dot = name.lastIndexOf('.');
         if (dot > 0) {
             name = name.substring(0, dot);
         }
         return name + ".acb";
+    }
+
+    /** 选择音频后立即检测 ffmpeg：缺失时弹窗并给出安装引导，避免生成阶段才报错。 */
+    private void checkFfmpeg(File f) {
+        String ffmpeg = FfmpegAudioTool.findFfmpeg();
+        if (ffmpeg == null) {
+            log("[警告] 未检测到系统 ffmpeg，将无法转码音频：" + f.getName() + "。"
+                    + FfmpegAudioTool.installGuidance().replace("\n", " "), true);
+            javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+            alert.setTitle("缺少 ffmpeg");
+            alert.setHeaderText("未检测到系统 ffmpeg");
+            alert.setContentText("本工具依赖系统 ffmpeg 把任意格式音频转码为 WAV。请先安装：\n\n"
+                    + FfmpegAudioTool.installGuidance());
+            alert.showAndWait();
+        } else {
+            log("[信息] 已检测到系统 ffmpeg：" + ffmpeg + "。", false);
+        }
     }
 
     /** 由保存的 out.acb 推导配对 AWB 路径（outBase.awb）。 */
@@ -347,46 +383,7 @@ public class MaiAwbApp extends Application {
     private record GenResult(byte[] acb, AwbNormalizer.Result norm) {
     }
 
-    private void inspectWav(File f) {
-        try {
-            WaveFile wav = WaveFile.parse(Files.readAllBytes(f.toPath()));
-            double seconds = (double) wav.sampleCount() / wav.sampleRate();
-            log(String.format("[WAV] %s — %d Hz / %d 声道采样 / %.3f s",
-                    f.getName(), wav.sampleRate(), wav.sampleCount(), seconds));
-            // 若 end 超出音频时长则自动修正
-            try {
-                double end = Double.parseDouble(loopEndField.getText().trim());
-                if (end > seconds) {
-                    loopEndField.setText(String.format("%.3f", seconds));
-                    log(String.format("[提示] loopEnd 已自动截断为音频时长 %.3f s", seconds));
-                }
-            } catch (NumberFormatException ignored) {
-                // 保持用户输入
-            }
-        } catch (Exception ex) {
-            log("[警告] WAV 解析失败：" + ex.getMessage(), true);
-        }
-    }
-
-    private void useWavDuration() {
-        String wavPath = wavField.getText().trim();
-        if (wavPath.isEmpty()) {
-            log("[提示] 请先选择 WAV 文件。");
-            return;
-        }
-        try {
-            WaveFile wav = WaveFile.parse(Files.readAllBytes(Path.of(wavPath)));
-            double seconds = (double) wav.sampleCount() / wav.sampleRate();
-            loopStartField.setText("0");
-            loopEndField.setText(String.format("%.3f", seconds));
-            log(String.format("[提示] 已设置循环区间 0 → %.3f s（全长预览）。", seconds));
-            onConfirmLoop();
-        } catch (Exception ex) {
-            log("[错误] 无法读取 WAV：" + ex.getMessage(), true);
-        }
-    }
-
-    /** 确认（应用）循环区间：校验数值，必要时按 WAV 时长截断 end，并给出状态反馈。 */
+    /** 确认（应用）循环区间：校验数值并给出状态反馈。超过音频结尾的截断由 CriUtils 按 C# 语义内部处理。 */
     private void onConfirmLoop() {
         double startSec;
         double endSec;
@@ -404,25 +401,6 @@ public class MaiAwbApp extends Application {
             flash("循环区间无效：需要 0 ≤ 开始 < 结束", true);
             log("[错误] 循环区间无效：需要 0 ≤ 开始 < 结束。", true);
             return;
-        }
-
-        // 已选 WAV 时，end 超出音频时长自动截断（与 CriUtils 内部逻辑一致）
-        String wavPath = wavField.getText().trim();
-        if (!wavPath.isEmpty()) {
-            try {
-                WaveFile wav = WaveFile.parse(Files.readAllBytes(Path.of(wavPath)));
-                double duration = (double) wav.sampleCount() / wav.sampleRate();
-                if (endSec > duration) {
-                    log(String.format("[提示] loopEnd %.3f s 超过音频时长 %.3f s，已自动截断。", endSec, duration));
-                    endSec = duration;
-                }
-                if (startSec >= endSec) {
-                    log("[提示] 截断后开始时间不小于结束时间，已重置开始时间为 0。");
-                    startSec = 0;
-                }
-            } catch (Exception ex) {
-                log("[警告] WAV 解析失败，未做时长截断：" + ex.getMessage(), true);
-            }
         }
 
         loopStartField.setText(formatSec(startSec));

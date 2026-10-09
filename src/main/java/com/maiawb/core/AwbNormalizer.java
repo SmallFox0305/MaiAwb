@@ -36,7 +36,11 @@ public final class AwbNormalizer {
     private AwbNormalizer() {
     }
 
-    public record Result(byte[] awb, boolean changed, String note) {
+    public record Result(byte[] awb, boolean changed, String note, byte[] payload) {
+    }
+
+    /** HCA fmt 头关键参数（对照 vgmstream/clhca.c 的位读取顺序）。 */
+    public record HcaParams(int channels, int sampleRate, long frameCount, int encoderDelay, int encoderPadding) {
     }
 
     /**
@@ -53,7 +57,7 @@ public final class AwbNormalizer {
             Parse p = parse(awb);
             if (p.streams.isEmpty()) {
                 sink.accept("AFS2 中没有任何非空流，未做规范化，将原样参与 ACB 生成（官机大概率无法播放）。");
-                return new Result(awb, false, "AFS2 为空（无非空流）");
+                return new Result(awb, false, "AFS2 为空（无非空流）", new byte[0]);
             }
 
             StringBuilder detail = new StringBuilder();
@@ -79,11 +83,53 @@ public final class AwbNormalizer {
                     ? "AWB 已规范化为官机 count=1 布局（音频位于流 id0；输入为 " + p.count + " 流结构）"
                     : "AWB 已是规范 count=1 布局，原样使用")
                     + "；非空流量=" + p.streams.size() + "（" + detail + "）";
-            return new Result(out, changed, note);
+            return new Result(out, changed, note, p.streams.get(0));
         } catch (Exception ex) {
             sink.accept("AFS2 解析失败（" + ex.getMessage() + "），未做规范化，将原样参与 ACB 生成。");
-            return new Result(awb, false, "AFS2 解析失败：" + ex.getMessage());
+            return new Result(awb, false, "AFS2 解析失败：" + ex.getMessage(), new byte[0]);
         }
+    }
+
+    /**
+     * 从 HCA 载荷解析 fmt 头关键参数（供 ffmpeg 转码对齐采样率/声道）。
+     * <p>
+     * 偏移严格对照 vgmstream clhca.c：@0x04 version(u16BE)、@0x06 header_size(u16BE)、
+     * @0x08 "fmt\\0"（掩码）、@0x0C channels(u8)、@0x0D sample_rate(u24BE)、
+     * @0x10 frame_count(u32BE)、@0x14 encoder_delay(u16BE)、@0x16 encoder_padding(u16BE)。
+     *
+     * @return 解析成功返回参数；非 HCA 或字段越界返回 {@code null}
+     */
+    public static HcaParams probeHca(byte[] payload) {
+        if (!isMaskedHca(payload) || payload.length < 0x18) {
+            return null;
+        }
+        int version = readBe16(payload, 4);
+        int headerSize = readBe16(payload, 6);
+        if (headerSize <= 0 || headerSize > payload.length || (version & 0xFF00) == 0) {
+            return null;
+        }
+        int channels = payload[0x0C] & 0xFF;
+        int rate = readBe24(payload, 0x0D);
+        long frames = readBe32(payload, 0x10);
+        int delay = readBe16(payload, 0x14);
+        int pad = readBe16(payload, 0x16);
+        if (channels < 1 || channels > 8 || rate < 8000 || rate > 192000 || frames <= 0) {
+            return null;
+        }
+        return new HcaParams(channels, rate, frames, delay, pad);
+    }
+
+    private static int readBe16(byte[] b, int off) {
+        return ((b[off] & 0xFF) << 8) | (b[off + 1] & 0xFF);
+    }
+
+    private static int readBe24(byte[] b, int off) {
+        return ((b[off] & 0xFF) << 16) | ((b[off + 1] & 0xFF) << 8) | (b[off + 2] & 0xFF);
+    }
+
+    private static long readBe32(byte[] b, int off) {
+        return ((long) (b[off] & 0xFF) << 24) | ((b[off + 1] & 0xFF) << 16)
+                | ((b[off + 2] & 0xFF) << 8) | (b[off + 3] & 0xFF);
     }
 
     /** 判断载荷是否以掩码 HCA 魔数起始（CRI keyed-HCA）。 */
@@ -171,11 +217,6 @@ public final class AwbNormalizer {
     private static long alignUp(long v, long align) {
         long r = (v + align - 1) / align * align;
         return Math.max(r, v);
-    }
-
-    private static int readBe32(byte[] b, int off) {
-        return ((b[off] & 0xFF) << 24) | ((b[off + 1] & 0xFF) << 16)
-                | ((b[off + 2] & 0xFF) << 8) | (b[off + 3] & 0xFF);
     }
 
     private static int readLe32(byte[] b, int off) {
