@@ -1,5 +1,8 @@
 # MaiAwb 舞萌音频数据预览片段追加工具
 
+> **本软件全程由 AI 制作**：全部代码、界面与构建脚本均由 AI 编写与维护。
+> 采用 [MIT 开源协议](LICENSE) 发布，版权归 Small_Fox 所有。
+
 复刻 maimai 官机 `CreateAcbWithPreview` 的 ACB 预览生成器。
 **AWB 为唯一输入**：工具内部从 HCA 头自提取音频参数（采样率 / 声道 / 样本数）驱动 ACB 生成，
 用户无需提交任何音频文件，也不内置 HCA→PCM 解码。
@@ -62,3 +65,7 @@ document 维护说明 → docs/AI_MAINTENANCE.md
 
 - 不产出可播放 PCM wav（无内置 HCA 解码）；如需可对接 vgmstream-cli
 - 官机实机验证待部署确认（见 `docs/AI_MAINTENANCE.md` 待办）
+
+## 开源协议
+
+[MIT](LICENSE) © 2026 Small_Fox。本软件全程由 AI 制作，按 MIT 协议自由使用、修改与分发。
