@@ -1,0 +1,82 @@
+/* ui/toB —— 极简工业风：白底黑字、直角硬边缘，尽量少的修饰。 */
+.root {
+    -fx-background-color: #ffffff;
+    -fx-font-size: 13px;
+}
+
+.label {
+    -fx-text-fill: #000000;
+}
+
+.text-field {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #000000;
+    -fx-border-color: #000000;
+    -fx-border-width: 1;
+    -fx-background-radius: 0;
+    -fx-background-insets: 0;
+}
+
+/* 输入框与按钮等高：以输入框高度为基准，统一 pref/min 高度（按钮不再自带高度）
+   —— 所有输入框与按钮（浏览/确认/生成/清空日志）高度保持一致 */
+.text-field,
+.button {
+    -fx-pref-height: 2.5em;
+    -fx-min-height: 2.5em;
+}
+
+.text-area {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #000000;
+    -fx-border-color: #000000;
+    -fx-border-width: 1;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
+}
+
+.text-area .content {
+    -fx-background-color: #ffffff;
+}
+
+.button {
+    -fx-background-color: #ffffff;
+    -fx-text-fill: #000000;
+    -fx-border-color: #000000;
+    -fx-border-width: 1;
+    -fx-background-radius: 0;
+    -fx-background-insets: 0;
+    -fx-padding: 4 14 4 14;
+}
+
+.button:hover {
+    -fx-background-color: #e8e8e8;
+}
+
+.button:pressed {
+    -fx-background-color: #c8c8c8;
+}
+
+.button:disabled {
+    -fx-opacity: 0.45;
+}
+
+/* 状态提示文字：仅用颜色区分，不铺背景 */
+.status-err {
+    -fx-text-fill: #cc0000;
+}
+
+.status-ok {
+    -fx-text-fill: #000000;
+}
+
+.loop-pending {
+    -fx-text-fill: #666666;
+}
+
+.loop-confirmed {
+    -fx-text-fill: #007a00;
+}
+
+.loop-error {
+    -fx-text-fill: #cc0000;
+}

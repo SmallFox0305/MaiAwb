@@ -17,23 +17,26 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HexFormat;
+import java.util.List;
 
 /**
- * ACB 预览生成器 —— 工业风格图形界面。
+ * ACB 预览生成器 —— 极简工业风图形界面（白底黑字、直角硬边缘，尽量少装饰）。
  * 用法一致地复刻 MaiChartManager 的 CreateAcbWithPreview：
  * 用户选择自己做好的 AWB → 从 AWB 内 HCA 提取音频参数（等价 WAV）→ templateV3.acb
  * -> 输出 ACB + 配对规范化 AWB。无需也不接受音频文件输入。
+ * 文件选择优先走系统原生对话框（Linux 下 kdialog=KDE/Dolphin 同款，其次 zenity），
+ * 无原生工具时回退 JavaFX 默认选择器。
  */
 public class MaiAwbApp extends Application {
 
@@ -43,7 +46,6 @@ public class MaiAwbApp extends Application {
     private final Label loopStateLabel = new Label();
     private final TextArea logArea = new TextArea();
     private final Label statusLabel = new Label();
-    private final Label led = new Label();
     private final Button generateButton = new Button("生成并导出 ACB");
 
     private File lastDir;
@@ -51,53 +53,46 @@ public class MaiAwbApp extends Application {
     @Override
     public void start(Stage stage) {
         awbField.setPromptText("选择 AFS2 / AWB 音频容器（必选）");
-        awbField.getStyleClass().add("field");
-        loopStartField.getStyleClass().addAll("field", "field-num");
-        loopEndField.getStyleClass().addAll("field", "field-num");
+        loopStartField.setPrefColumnCount(6);
+        loopEndField.setPrefColumnCount(6);
         // 回车即确认，修改数值后重新标记
         loopStartField.setOnAction(e -> onConfirmLoop());
         loopEndField.setOnAction(e -> onConfirmLoop());
         loopStartField.textProperty().addListener((obs, a, b) -> markLoopDirty());
         loopEndField.textProperty().addListener((obs, a, b) -> markLoopDirty());
 
-        stage.setTitle("MaiAwb — ACB Preview Generator v1.0.0");
+        stage.setTitle("MaiAwb 舞萌音频数据预览片段追加工具 v1.0.0");
         stage.setMinWidth(760);
         stage.setMinHeight(560);
 
         BorderPane root = new BorderPane();
-        root.getStyleClass().add("root");
         root.setTop(buildTitleBar());
         root.setCenter(buildCenter());
         root.setBottom(buildStatusBar());
 
         Scene scene = new Scene(root, 820, 620);
-        scene.getStylesheets().add(getClass().getResource("/osc_theme.css").toExternalForm());
+        scene.getStylesheets().add(getClass().getResource("/tob.css").toExternalForm());
         stage.setScene(scene);
         stage.show();
 
-        generateButton.setOnAction(e -> onGenerate(stage));
+        statusLabel.setText("就绪。");
+        generateButton.setOnAction(e -> onGenerate());
         log("就绪。选择 AWB 音频文件与循环区间后生成 .acb + 配对 .awb。");
     }
 
     // ------------------------------------------------------------------
 
     private Region buildTitleBar() {
-        HBox bar = new HBox(10);
+        HBox bar = new HBox(12);
         bar.setAlignment(Pos.CENTER_LEFT);
-        bar.getStyleClass().add("title-bar");
-
-        led.setStyle("-fx-background-color: #6fcf97;");
-        led.getStyleClass().add("led");
-        Label brand = new Label("MAI AWB · ACB PREVIEW GENERATOR");
-        brand.getStyleClass().add("title-brand");
-        Label sub = new Label("复刻 MaiChartManager::CriUtils.CreateAcbWithPreview");
-        sub.getStyleClass().add("title-sub");
+        bar.setPadding(new Insets(10, 14, 8, 14));
+        Label brand = new Label("MaiAwb 舞萌音频数据预览片段追加工具");
+        brand.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
         Region filler = new Region();
         HBox.setHgrow(filler, Priority.ALWAYS);
-        Label ver = new Label("v1.0.0 · JDK27 · JavaFX");
-        ver.getStyleClass().add("title-sub");
-
-        bar.getChildren().addAll(led, brand, filler, sub, ver);
+        Label ver = new Label("v1.0.0");
+        ver.setStyle("-fx-text-fill: #444444;");
+        bar.getChildren().addAll(brand, filler, ver);
         return bar;
     }
 
@@ -105,84 +100,59 @@ public class MaiAwbApp extends Application {
         VBox center = new VBox(12);
         center.setPadding(new Insets(14));
 
-        // 输入区
-        VBox inputPanel = new VBox(8);
-        inputPanel.getStyleClass().add("panel");
-        Label inputTitle = new Label("▸ 输入");
-        inputTitle.getStyleClass().add("section-title");
-
         GridPane form = new GridPane();
         form.setHgap(8);
-        form.setVgap(8);
-        form.setPadding(new Insets(4, 0, 0, 0));
+        form.setVgap(10);
+        form.setAlignment(Pos.CENTER_LEFT);
 
         int row = 0;
         form.add(rowLabel("AWB 文件"), 0, row);
         form.add(awbField, 1, row);
         GridPane.setHgrow(awbField, Priority.ALWAYS);
         Button awbBrowse = browseButton("浏览…", () -> {
-            File f = pickFile(stage(), "选择 AFS2/AWB 音频", "AWB 文件(*.awb)", "*.awb", lastDir());
+            File f = pickOpenRaw("选择 AFS2/AWB 音频", "AWB 文件(*.awb)", List.of("*.awb"));
             if (f != null) {
                 awbField.setText(f.getAbsolutePath());
                 lastDir = f.getParentFile();
             }
         });
         form.add(awbBrowse, 2, row);
-        awbField.setEditable(true);
 
         row++;
         form.add(rowLabel("循环区间"), 0, row);
         HBox loopBox = new HBox(6);
         loopBox.setAlignment(Pos.CENTER_LEFT);
-        loopBox.getChildren().add(new Label("开始(秒)"));
-        loopBox.getChildren().add(loopStartField);
-        loopBox.getChildren().add(new Label("结束(秒)"));
-        loopBox.getChildren().add(loopEndField);
-        for (var n : loopBox.getChildren()) {
-            if (n instanceof Label l) {
-                l.getStyleClass().add("form-label");
-            }
-        }
-        loopStateLabel.setText("点击「确认」提交循环区间");
-        loopStateLabel.getStyleClass().add("loop-pending");
-        loopBox.getChildren().add(loopStateLabel);
-        form.add(loopBox, 1, row);
-        GridPane.setHgrow(loopBox, Priority.ALWAYS);
+        loopBox.getChildren().addAll(
+                new Label("开始(秒)"), loopStartField,
+                new Label("结束(秒)"), loopEndField);
 
-        HBox loopActions = new HBox(6);
-        loopActions.setAlignment(Pos.CENTER_LEFT);
         Button confirmLoopBtn = new Button("确认");
-        confirmLoopBtn.getStyleClass().add("confirm-button");
         confirmLoopBtn.setTooltip(new javafx.scene.control.Tooltip("校验并应用当前循环区间（回车亦可）"));
         confirmLoopBtn.setOnAction(e -> onConfirmLoop());
-        loopActions.getChildren().add(confirmLoopBtn);
-        form.add(loopActions, 2, row);
+        loopStateLabel.setText("点击「确认」提交循环区间");
+        loopStateLabel.getStyleClass().add("loop-pending");
+        // 确认按钮与状态文字交换顺序，间距与行内其他控件一致（6px）：…结束(秒) [确认] [状态文字]
+        loopBox.getChildren().addAll(confirmLoopBtn, loopStateLabel);
+        form.add(loopBox, 1, row);
+        GridPane.setHgrow(loopBox, Priority.ALWAYS);
+        form.add(generateButton, 2, row);
 
-        inputPanel.getChildren().addAll(inputTitle, form);
-
-        // 按钮区
-        HBox actionBar = new HBox(10);
-        actionBar.setAlignment(Pos.CENTER_LEFT);
-        actionBar.getChildren().add(generateButton);
-        generateButton.getStyleClass().add("accent-button");
-        Button clearLogBtn = new Button("清空日志");
-        clearLogBtn.getStyleClass().add("action-button");
-        clearLogBtn.setOnAction(e -> logArea.clear());
-        actionBar.getChildren().add(clearLogBtn);
-
-        // 日志区
         VBox logPanel = new VBox(6);
-        logPanel.getStyleClass().add("panel");
-        Label logTitle = new Label("▸ 日志");
-        logTitle.getStyleClass().add("section-title");
+        logPanel.getChildren().add(new Label("日志"));
         logArea.setEditable(false);
         logArea.setWrapText(true);
-        logArea.getStyleClass().add("log-area");
         logArea.setPrefRowCount(10);
-        VBox.setVgrow(logArea, Priority.ALWAYS);
-        logPanel.getChildren().addAll(logTitle, logArea);
+        // 清空日志按钮堆叠到日志框右下角
+        StackPane logStack = new StackPane(logArea);
+        Button clearLogBtn = new Button("清空日志");
+        clearLogBtn.setOnAction(e -> logArea.clear());
+        StackPane.setAlignment(clearLogBtn, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(clearLogBtn, new Insets(0, 8, 8, 0));
+        logStack.getChildren().add(clearLogBtn);
+        VBox.setVgrow(logStack, Priority.ALWAYS);
+        logPanel.getChildren().add(logStack);
 
-        center.getChildren().addAll(inputPanel, actionBar, logPanel);
+        center.getChildren().addAll(form, logPanel);
         VBox.setVgrow(logPanel, Priority.ALWAYS);
         return center;
     }
@@ -198,15 +168,15 @@ public class MaiAwbApp extends Application {
     private Region buildStatusBar() {
         HBox bar = new HBox(8);
         bar.setAlignment(Pos.CENTER_LEFT);
-        bar.getStyleClass().add("status-bar");
-        statusLabel.getStyleClass().add("status-text");
+        bar.setPadding(new Insets(4, 14, 8, 14));
+        statusLabel.getStyleClass().add("status-ok");
         bar.getChildren().add(statusLabel);
         return bar;
     }
 
     // ------------------------------------------------------------------
 
-    private void onGenerate(Stage stage) {
+    private void onGenerate() {
         String awbPath = awbField.getText().trim();
 
         if (awbPath.isEmpty()) {
@@ -268,14 +238,7 @@ public class MaiAwbApp extends Application {
             AwbNormalizer.Result norm = result.norm();
             log("[信息] AWB 处理：" + norm.note(), false);
             String suggested = suggestOutputName(awbPath);
-
-            FileChooser fc = new FileChooser();
-            fc.setTitle("导出 ACB 文件");
-            fc.setInitialDirectory(lastDir());
-            fc.setInitialFileName(suggested);
-            fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("ACB 文件(*.acb)", "*.acb"));
-            fxIgnored(fc);
-            File out = fc.showSaveDialog(stage);
+            File out = pickSaveRaw("导出 ACB 文件", suggested, "ACB 文件(*.acb)", List.of("*.acb"));
             if (out == null) {
                 flash("已生成，已取消保存", false);
                 log("[提示] 转换完成（" + acb.length + " 字节），用户取消了保存。");
@@ -400,35 +363,62 @@ public class MaiAwbApp extends Application {
 
     private void setBusy(boolean busy) {
         generateButton.setDisable(busy);
-        led.setStyle(busy
-                ? "-fx-background-color: #ffb000;"
-                : "-fx-background-color: #6fcf97;");
+        generateButton.setText(busy ? "生成中…" : "生成并导出 ACB");
     }
 
     // ------------------------------------------------------------------
 
-    private static File pickFile(Stage owner, String title, String desc, String ext, File dir) {
+    /** 打开选择器：优先原生（Linux 下 kdialog=KDE/Dolphin 同款，其次 zenity），无原生工具或异常时回退 JavaFX。 */
+    private File pickOpenRaw(String title, String desc, List<String> patterns) {
+        NativeFileDialog.NativeResult r = NativeFileDialog.open(lastDir(), title, desc, patterns,
+                w -> log("[提示] " + w, false));
+        if (r.supported()) {
+            return r.file();
+        }
+        return pickOpenJavaFx(title, desc, patterns);
+    }
+
+    /** 另存为选择器：同上，优先原生。 */
+    private File pickSaveRaw(String title, String initialName, String desc, List<String> patterns) {
+        NativeFileDialog.NativeResult r = NativeFileDialog.save(lastDir(), initialName, title, desc, patterns,
+                w -> log("[提示] " + w, false));
+        if (r.supported()) {
+            return r.file();
+        }
+        return pickSaveJavaFx(title, initialName, desc, patterns);
+    }
+
+    private File pickOpenJavaFx(String title, String desc, List<String> patterns) {
         FileChooser fc = new FileChooser();
         fc.setTitle(title);
-        if (dir != null && dir.isDirectory()) {
+        File dir = lastDir();
+        if (dir.isDirectory()) {
             fc.setInitialDirectory(dir);
         }
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(desc, ext));
-        fxIgnored(fc);
-        return fc.showOpenDialog(owner);
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(desc, String.join(";", patterns)));
+        return fc.showOpenDialog(stage());
+    }
+
+    private File pickSaveJavaFx(String title, String initialName, String desc, List<String> patterns) {
+        FileChooser fc = new FileChooser();
+        fc.setTitle(title);
+        File dir = lastDir();
+        if (dir.isDirectory()) {
+            fc.setInitialDirectory(dir);
+        }
+        fc.setInitialFileName(initialName);
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(desc, String.join(";", patterns)));
+        return fc.showSaveDialog(stage());
     }
 
     private static Button browseButton(String text, Runnable action) {
         Button b = new Button(text);
-        b.getStyleClass().add("action-button");
         b.setOnAction(e -> action.run());
         return b;
     }
 
     private static Label rowLabel(String text) {
-        Label l = new Label(text);
-        l.getStyleClass().add("form-label");
-        return l;
+        return new Label(text);
     }
 
     private static byte[] sha1(byte[] data) {
@@ -452,10 +442,6 @@ public class MaiAwbApp extends Application {
         StringWriter sw = new StringWriter();
         t.printStackTrace(new PrintWriter(sw));
         return sw.toString();
-    }
-
-    // 让某些静态方法避免不可达代码警告（保留 JDK 兼容占位）
-    private static void fxIgnored(Object o) {
     }
 
     // ------------------------------------------------------------------
