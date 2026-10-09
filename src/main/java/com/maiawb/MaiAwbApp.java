@@ -61,7 +61,7 @@ public class MaiAwbApp extends Application {
         loopStartField.textProperty().addListener((obs, a, b) -> markLoopDirty());
         loopEndField.textProperty().addListener((obs, a, b) -> markLoopDirty());
 
-        stage.setTitle("MaiAwb 舞萌音频数据预览片段追加工具 v1.0.0");
+        stage.setTitle("MaiAwb 舞萌音频数据预览片段追加工具 v26.1-A");
         stage.setMinWidth(760);
         stage.setMinHeight(560);
 
@@ -90,7 +90,7 @@ public class MaiAwbApp extends Application {
         brand.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
         Region filler = new Region();
         HBox.setHgrow(filler, Priority.ALWAYS);
-        Label ver = new Label("v1.0.0");
+        Label ver = new Label("v26.1-A");
         ver.setStyle("-fx-text-fill: #444444;");
         bar.getChildren().addAll(brand, filler, ver);
         return bar;

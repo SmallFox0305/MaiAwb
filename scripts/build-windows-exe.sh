@@ -30,6 +30,10 @@ set -euo pipefail
 JFX_VER="${JFX_VER:-27}"
 WINE_IMAGE="${WINE_IMAGE:-scottyhardy/docker-wine}"
 JDK_URL="${JDK_URL:-https://download.oracle.com/java/27/latest/jdk-27_windows-x64_bin.zip}"
+# 版本号规则：YY.PATCH-LETTER（26=年份 1=补丁号 A=迭代字母）。
+# 展示版用于产物名称；jpackage --app-version 仅接受纯数字，故拆为 26.1.0。
+APP_VERSION="26.1-A"
+JPACKAGE_VERSION="26.1.0"
 WORK="${1:-/tmp/opencode/xwin}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -95,7 +99,7 @@ wine 'Z:\work\winjdk\jdk\bin\jpackage.exe' \
   --runtime-image 'C:\winimg' \
   --module-path 'Z:\work\app;Z:\work\jfx-win' \
   --module 'com.maiawb/com.maiawb.MaiAwbApp' \
-  --name MaiAwb --app-version 1.0.0 \
+  --name MaiAwb --app-version "$JPACKAGE_VERSION" \
   --dest 'C:\out' --temp 'C:\tmp'
 
 echo WINE_BUNDLE_OK
@@ -107,6 +111,7 @@ docker run --rm \
   -e HOME=/work \
   -e WINEPREFIX=/work/.wine \
   -e WINEDEBUG=-all \
+  -e JPACKAGE_VERSION="$JPACKAGE_VERSION" \
   --entrypoint /bin/bash \
   "$WINE_IMAGE" /work/winebuild.sh 2>&1 \
   | grep -v "Attempt to"
@@ -116,7 +121,8 @@ rm -rf "$WORK/out/MaiAwb"
 cp -r "$WORK/.wine/drive_c/out/MaiAwb" "$WORK/out/"
 
 echo "==> [5/5] 打包 zip（7z）"
-rm -f "$WORK/out/MaiAwb-windows-x64.zip"
-( cd "$WORK/out" && 7z a -tzip -mx=5 -bso0 -bsp0 MaiAwb-windows-x64.zip MaiAwb >/dev/null )
-echo "完成：$WORK/out/MaiAwb-windows-x64.zip"
-ls -la "$WORK/out/MaiAwb/MaiAwb.exe" "$WORK/out/MaiAwb-windows-x64.zip"
+ZIP_NAME="MaiAwb-${APP_VERSION}-windows-x64.zip"
+rm -f "$WORK/out/$ZIP_NAME"
+( cd "$WORK/out" && 7z a -tzip -mx=5 -bso0 -bsp0 "$ZIP_NAME" MaiAwb >/dev/null )
+echo "完成：$WORK/out/$ZIP_NAME"
+ls -la "$WORK/out/MaiAwb/MaiAwb.exe" "$WORK/out/$ZIP_NAME"

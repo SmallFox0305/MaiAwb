@@ -6,7 +6,7 @@
 
     <groupId>com.maiawb</groupId>
     <artifactId>MaiAwb</artifactId>
-    <version>1.0.0</version>
+    <version>26.1-A</version>
     <packaging>jar</packaging>
 
     <name>MaiAwb - ACB Preview Generator</name>
