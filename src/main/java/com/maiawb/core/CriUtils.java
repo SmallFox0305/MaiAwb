@@ -6,8 +6,6 @@ import com.maiawb.core.cri.CriTableWriterSettings;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -38,30 +36,40 @@ public final class CriUtils {
 
     /**
      * 主转换逻辑，对应 C#:
-     * {@code CreateAcbWithPreview(string wavPath, byte[] awbBytes, TimeSpan loopStart, TimeSpan loopEnd)}
+     * {@code MaiChartManager.Utils.CriUtils.CreateAcbWithPreview(string wavPath, byte[] awbBytes, TimeSpan loopStart, TimeSpan loopEnd)}
+     * <p>
+     * 模板固定使用内置 templateV3.acb（不提供也不支持自定义模板，与官机工具链一致）。
      *
      * @param wavBytes        预览音频（PCM16 WAV）字节
-     * @param awbBytes        目标音频 AFS2/AWB 字节
+     * @param awbBytes        目标音频 AFS2/AWB 字节（建议先经 {@link AwbNormalizer#normalize} 规范化）
      * @param loopStartSecond 循环起始秒（对应 TimeSpan）
      * @param loopEndSecond   循环结束秒
-     * @param templateAcb     模板 ACB 字节（通常为内置 templateV3.acb）
      */
     public static byte[] createAcbWithPreview(byte[] wavBytes, byte[] awbBytes,
-                                              double loopStartSecond, double loopEndSecond,
-                                              byte[] templateAcb) {
-        return createAcbWithPreview(wavBytes, awbBytes, loopStartSecond, loopEndSecond, templateAcb,
+                                              double loopStartSecond, double loopEndSecond) throws IOException {
+        return createAcbWithPreview(wavBytes, awbBytes, loopStartSecond, loopEndSecond,
                 w -> System.err.println("[警告] " + w));
     }
 
     /**
-     * 主转换逻辑，同 {@link #createAcbWithPreview(byte[], byte[], double, double, byte[])}，
+     * 主转换逻辑，同 {@link #createAcbWithPreview(byte[], byte[], double, double)}，
      * 额外通过 {@code warningSink} 上报不影响输出的提示（可能帮助避免生成官机不可读的文件）。
      *
      * @param warningSink 生成过程中的警告回调；可为 {@code null}
      */
     public static byte[] createAcbWithPreview(byte[] wavBytes, byte[] awbBytes,
                                               double loopStartSecond, double loopEndSecond,
-                                              byte[] templateAcb, Consumer<String> warningSink) {
+                                              Consumer<String> warningSink) throws IOException {
+        return createAcbWithPreview(wavBytes, awbBytes, loopStartSecond, loopEndSecond,
+                loadBundledTemplate(), warningSink);
+    }
+
+    /**
+     * 核心实现：在给定模板字节上复刻 C# CreateAcbWithPreview 的全部字节语义。
+     */
+    private static byte[] createAcbWithPreview(byte[] wavBytes, byte[] awbBytes,
+                                               double loopStartSecond, double loopEndSecond,
+                                               byte[] templateAcb, Consumer<String> warningSink) {
         Consumer<String> warn = warningSink == null ? w -> {
         } : warningSink;
         // SHA1(awb)
@@ -119,24 +127,6 @@ public final class CriUtils {
 
         criTable.setWriterSettings(CriTableWriterSettings.adx2());
         return criTable.save();
-    }
-
-    public static byte[] createAcbWithPreview(byte[] wavBytes, byte[] awbBytes,
-                                              double loopStartSecond, double loopEndSecond,
-                                              Path templateAcbPath) throws IOException {
-        return createAcbWithPreview(wavBytes, awbBytes, loopStartSecond, loopEndSecond, templateAcbPath, null);
-    }
-
-    /**
-     * 同 {@link #createAcbWithPreview(byte[], byte[], double, double, Path)}，额外支持警告回调。
-     */
-    public static byte[] createAcbWithPreview(byte[] wavBytes, byte[] awbBytes,
-                                              double loopStartSecond, double loopEndSecond,
-                                              Path templateAcbPath, Consumer<String> warningSink) throws IOException {
-        byte[] template = templateAcbPath == null
-                ? loadBundledTemplate()
-                : Files.readAllBytes(templateAcbPath);
-        return createAcbWithPreview(wavBytes, awbBytes, loopStartSecond, loopEndSecond, template, warningSink);
     }
 
     /**

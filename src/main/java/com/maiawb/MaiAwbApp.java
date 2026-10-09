@@ -1,5 +1,6 @@
 package com.maiawb;
 
+import com.maiawb.core.AwbNormalizer;
 import com.maiawb.core.CriUtils;
 import com.maiawb.core.WaveFile;
 import javafx.application.Application;
@@ -37,7 +38,6 @@ public class MaiAwbApp extends Application {
 
     private final TextField awbField = new TextField();
     private final TextField wavField = new TextField();
-    private final CheckableTextField templateField = new CheckableTextField();
     private final TextField loopStartField = new TextField("10.0");
     private final TextField loopEndField = new TextField("15.0");
     private final Label loopStateLabel = new Label();
@@ -61,7 +61,6 @@ public class MaiAwbApp extends Application {
         loopEndField.setOnAction(e -> onConfirmLoop());
         loopStartField.textProperty().addListener((obs, a, b) -> markLoopDirty());
         loopEndField.textProperty().addListener((obs, a, b) -> markLoopDirty());
-        templateField.field.getStyleClass().addAll("field");
 
         stage.setTitle("MaiAwb — ACB Preview Generator v1.0.0");
         stage.setMinWidth(760);
@@ -146,27 +145,6 @@ public class MaiAwbApp extends Application {
             }
         });
         form.add(wavBrowse, 2, row);
-
-        row++;
-        form.add(rowLabel("模板 ACB"), 0, row);
-        HBox tplBox = new HBox(6);
-        tplBox.setAlignment(Pos.CENTER_LEFT);
-        tplBox.getChildren().add(templateField.checkBox);
-        tplBox.getChildren().add(templateField.field);
-        HBox.setHgrow(templateField.field, Priority.ALWAYS);
-        Button tplBrowse = browseButton("浏览…", () -> {
-            File f = pickFile(stage(), "选择模板 ACB（留空使用内置）", "ACB 文件(*.acb)", "*.acb", lastDir());
-            if (f != null) {
-                templateField.checkBox.setSelected(true);
-                templateField.field.setText(f.getAbsolutePath());
-                lastDir = f.getParentFile();
-            }
-        });
-        tplBox.getChildren().add(tplBrowse);
-        form.add(tplBox, 1, row);
-        templateField.checkBox.setSelected(false);
-        templateField.field.setPromptText("默认内置 templateV3.acb");
-        templateField.field.setDisable(true);
 
         row++;
         form.add(rowLabel("循环区间"), 0, row);
@@ -283,29 +261,27 @@ public class MaiAwbApp extends Application {
             return;
         }
 
-        boolean useCustomTemplate = templateField.checkBox.isSelected();
-        String customTemplatePath = templateField.field.getText().trim();
-        if (useCustomTemplate && customTemplatePath.isEmpty()) {
-            flash("已勾选自定义模板但未选择文件", true);
-            log("[错误] 已勾选自定义模板但未选择文件。", true);
-            return;
-        }
-
         flash("正在生成…", false);
         setBusy(true);
 
-        Task<byte[]> task = new Task<>() {
+        Task<GenResult> task = new Task<>() {
             @Override
-            protected byte[] call() throws Exception {
-                Path tpl = useCustomTemplate ? Path.of(customTemplatePath) : null;
-                return CriUtils.createAcbWithPreview(wavBytes, awbBytes, startSec, endSec, tpl,
+            protected GenResult call() throws Exception {
+                // 1) 规范化为官机 count=1 布局（音频位于流 id0），保证与模板 ACB 的 StreamAwbId=0 配对自洽
+                AwbNormalizer.Result norm = AwbNormalizer.normalize(awbBytes, w -> log("[警告] " + w, true));
+                // 2) 生成 ACB（模板固定内置 templateV3.acb）
+                byte[] acb = CriUtils.createAcbWithPreview(wavBytes, norm.awb(), startSec, endSec,
                         w -> log("[警告] " + w, true));
+                return new GenResult(acb, norm);
             }
         };
 
         task.setOnSucceeded(e -> {
             setBusy(false);
-            byte[] acb = task.getValue();
+            GenResult result = task.getValue();
+            byte[] acb = result.acb();
+            AwbNormalizer.Result norm = result.norm();
+            log("[信息] AWB 处理：" + norm.note(), false);
             String suggested = suggestOutputName(wavPath);
 
             FileChooser fc = new FileChooser();
@@ -322,10 +298,14 @@ public class MaiAwbApp extends Application {
             }
             try {
                 Files.write(out.toPath(), acb);
+                // 连同规范化后的配对 AWB 一并导出（同基名 .awb），保证 ACB↔AWB 自洽
+                Path awbOut = deriveAwbOut(out.toPath());
+                Files.write(awbOut, norm.awb());
                 lastDir = out.getParentFile();
                 log("[完成] 已导出 " + out.getAbsolutePath());
                 log("      大小 " + acb.length + " 字节，SHA1(" + HexFormat.of().formatHex(sha1(acb)) + ")");
-                flash("导出完成 → " + out.getName(), false);
+                log("      配对 AWB（已规范化为官机 count=1 布局）→ " + awbOut);
+                flash("导出完成 → " + out.getName() + "（含配对 .awb）", false);
             } catch (Exception ex) {
                 flash("写入文件失败", true);
                 log("[错误] 写入输出文件失败：" + ex.getMessage(), true);
@@ -354,6 +334,17 @@ public class MaiAwbApp extends Application {
             name = name.substring(0, dot);
         }
         return name + ".acb";
+    }
+
+    /** 由保存的 out.acb 推导配对 AWB 路径（outBase.awb）。 */
+    private static Path deriveAwbOut(Path out) {
+        String name = out.getFileName().toString();
+        String base = name.replaceFirst("(?i)\\.acb$", "");
+        return out.resolveSibling(base + ".awb");
+    }
+
+    /** 生成任务的结果：ACB 字节 + AWB 规范化结果（用于导出配对 .awb）。 */
+    private record GenResult(byte[] acb, AwbNormalizer.Result norm) {
     }
 
     private void inspectWav(File f) {
@@ -541,22 +532,6 @@ public class MaiAwbApp extends Application {
     }
 
     // ------------------------------------------------------------------
-
-    /** 可勾选的“使用自定义模板”输入行。 */
-    private static final class CheckableTextField {
-        final javafx.scene.control.CheckBox checkBox = new javafx.scene.control.CheckBox("自定义模板");
-        final TextField field = new TextField();
-
-        CheckableTextField() {
-            checkBox.setStyle("-fx-text-fill: #9aa7b1;");
-            checkBox.selectedProperty().addListener((obs, oldV, v) -> field.setDisable(!v));
-            getStyleClass0();
-        }
-
-        void getStyleClass0() {
-            // 占位：由外部追加样式
-        }
-    }
 
     public static void main(String[] args) {
         launch(args);

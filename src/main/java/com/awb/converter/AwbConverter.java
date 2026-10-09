@@ -5,10 +5,12 @@ import com.maiawb.core.CriUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 /**
  * AWB → ACB 转换入口（功能性门面），签名与 MaiChartManager 的
  * {@code CreateAcbWithPreview(wavPath, awbBytes, loopStart, loopEnd)} 对齐。
+ * 模板固定使用内置 templateV3.acb（不支持自定义模板，与官机工具链一致）。
  * 实际转换逻辑全部委托给 {@link com.maiawb.core.CriUtils}。
  */
 public final class AwbConverter {
@@ -31,22 +33,19 @@ public final class AwbConverter {
     }
 
     /**
-     * 同 {@link #createAcbWithPreview(String, byte[], long, long)}，但允许指定外部模板 ACB。
+     * 同 {@link #createAcbWithPreview(String, byte[], long, long)}，额外支持警告回调。
      *
-     * @param templatePath 模板 ACB 路径；为 {@code null} 时使用内置 templateV3.acb
+     * @param warningSink 生成过程的警告回调；可为 {@code null}
      */
     public static byte[] createAcbWithPreview(String wavPath, byte[] awbBytes,
                                               long loopStartTicks, long loopEndTicks,
-                                              String templatePath) throws IOException {
-        byte[] template = templatePath == null
-                ? CriUtils.loadBundledTemplate()
-                : Files.readAllBytes(Path.of(templatePath));
+                                              Consumer<String> warningSink) throws IOException {
         return CriUtils.createAcbWithPreview(
                 Files.readAllBytes(Path.of(wavPath)),
                 awbBytes,
                 ticksToSeconds(loopStartTicks),
                 ticksToSeconds(loopEndTicks),
-                template);
+                warningSink);
     }
 
     /** TimeSpan ticks（100 纳秒）→ 秒。 */
