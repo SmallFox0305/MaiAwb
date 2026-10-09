@@ -1,14 +1,14 @@
-module com.maiawb {
+module top.smallfox.maiacb {
     requires javafx.controls;
     requires javafx.graphics;
     requires java.desktop;
 
-    exports com.maiawb;
-    exports com.maiawb.cli;
-    exports com.maiawb.core;
-    exports com.maiawb.core.cri;
-    exports com.maiawb.core.io;
-    exports com.awb.converter;
+    exports top.smallfox.maiacb;
+    exports top.smallfox.maiacb.cli;
+    exports top.smallfox.maiacb.core;
+    exports top.smallfox.maiacb.core.cri;
+    exports top.smallfox.maiacb.core.io;
+    exports top.smallfox.maiacb.converter;
 
-    opens com.maiawb to javafx.graphics;
+    opens top.smallfox.maiacb to javafx.graphics;
 }

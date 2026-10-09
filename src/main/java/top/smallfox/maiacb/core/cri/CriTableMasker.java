@@ -1,4 +1,4 @@
-package com.maiawb.core.cri;
+package top.smallfox.maiacb.core.cri;
 
 /**
  * CRIMW 表的异或掩码算法，对应 SonicAudioLib.CriMw.CriTableMasker。

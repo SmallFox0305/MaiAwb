@@ -1,6 +1,6 @@
-package com.awb.converter;
+package top.smallfox.maiacb.converter;
 
-import com.maiawb.core.CriUtils;
+import top.smallfox.maiacb.core.CriUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -11,7 +11,7 @@ import java.util.function.Consumer;
  * AWB → ACB 转换入口（功能性门面），签名与 MaiChartManager 的
  * {@code CreateAcbWithPreview(wavPath, awbBytes, loopStart, loopEnd)} 对齐。
  * 模板固定使用内置 templateV3.acb（不支持自定义模板，与官机工具链一致）。
- * 实际转换逻辑全部委托给 {@link com.maiawb.core.CriUtils}。
+ * 实际转换逻辑全部委托给 {@link top.smallfox.maiacb.core.CriUtils}。
  */
 public final class AwbConverter {
 

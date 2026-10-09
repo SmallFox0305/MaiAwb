@@ -1,4 +1,4 @@
-package com.maiawb.core.cri;
+package top.smallfox.maiacb.core.cri;
 
 /**
  * CriTable 字段标志位，与 SonicAudioLib.CriMw.CriFieldFlag 一致。

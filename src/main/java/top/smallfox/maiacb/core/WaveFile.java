@@ -1,4 +1,4 @@
-package com.maiawb.core;
+package top.smallfox.maiacb.core;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;

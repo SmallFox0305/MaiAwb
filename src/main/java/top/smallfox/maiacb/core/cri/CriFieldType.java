@@ -1,4 +1,4 @@
-package com.maiawb.core.cri;
+package top.smallfox.maiacb.core.cri;
 
 /**
  * CriTable 字段类型枚举，顺序即类型编号（0..12），对应 C# 侧 CriField.FieldTypes。

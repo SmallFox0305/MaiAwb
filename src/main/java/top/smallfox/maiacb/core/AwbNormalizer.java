@@ -1,4 +1,4 @@
-package com.maiawb.core;
+package top.smallfox.maiacb.core;
 
 import java.util.ArrayList;
 import java.util.Arrays;

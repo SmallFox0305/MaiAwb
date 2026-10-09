@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 在 Linux 上交叉打包 Windows x64 版 MaiAwb（含真正可双击的 MaiAwb.exe）
+# 在 Linux 上交叉打包 Windows x64 版 MaiAcb（含真正可双击的 MaiAcb.exe）
 #
 # 原理：jlink/jpackage 不能跨平台直接生成 Windows 产物，因此借助
 #   Docker 内的 Wine 运行 Windows JDK 的 jlink + jpackage（--type app-image），
 #   JDK 与 JavaFX 均使用 Windows 原生版本（JavaFX 用 -win classifier），
-#   最终产出 out/MaiAwb/MaiAwb.exe（自包含运行时 + 启动器），并整目录打包 zip。
+#   最终产出 out/MaiAcb/MaiAcb.exe（自包含运行时 + 启动器），并整目录打包 zip。
 #
 # 已知坑（均已在本机验证解决）：
 #   - 部分发行版（如 Temurin）27 的 Windows 包不再带 jmods，jlink 无法运行
@@ -19,7 +19,7 @@
 #
 # 用法：
 #   scripts/build-windows-exe.sh [工作目录]
-#   工作目录默认 /tmp/opencode/xwin；产物在工作目录 out/MaiAwb/ 下（zip 同目录）。
+#   工作目录默认 /tmp/opencode/xwin；产物在工作目录 out/MaiAcb/ 下（zip 同目录）。
 # 可选环境变量：
 #   JDK_URL=…            Windows JDK 27 zip（默认甲骨文官方）
 #   JFX_VER=27           与 pom.xml 的 javafx.version 配套
@@ -31,9 +31,9 @@ JFX_VER="${JFX_VER:-27}"
 WINE_IMAGE="${WINE_IMAGE:-scottyhardy/docker-wine}"
 JDK_URL="${JDK_URL:-https://download.oracle.com/java/27/latest/jdk-27_windows-x64_bin.zip}"
 # 版本号规则：YY.PATCH-LETTER（26=年份 1=补丁号 A=迭代字母）。
-# 展示版用于产物名称；jpackage --app-version 仅接受纯数字，故拆为 26.1.0。
-APP_VERSION="26.1-A"
-JPACKAGE_VERSION="26.1.0"
+# 展示版用于产物名称；jpackage --app-version 仅接受纯数字，故拆为 26.2.0。
+APP_VERSION="26.2-A"
+JPACKAGE_VERSION="26.2.0"
 WORK="${1:-/tmp/opencode/xwin}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -64,7 +64,7 @@ ls "$WORK/jfx-win/"*.jar >/dev/null
 
 echo "==> [3/5] 打包模块 jar（Linux 编译，字节码平台无关）"
 mvn -q -f "$REPO/pom.xml" package -DskipTests
-cp "$REPO/target/MaiAwb.jar" "$WORK/app/"
+cp "$REPO/target/MaiAcb.jar" "$WORK/app/"
 
 echo "==> [4/5] Docker 内 Wine 执行 jlink + jpackage（--type app-image）"
 cat > "$WORK/winebuild.sh" <<'WINEBUILD'
@@ -90,16 +90,16 @@ rm -rf /work/.wine/drive_c/winimg /work/.wine/drive_c/out /work/.wine/drive_c/tm
 echo "[wine] jlink -> C:\winimg"
 wine 'Z:\work\winjdk\jdk\bin\jlink.exe' \
   --module-path "$MP" \
-  --add-modules 'com.maiawb,javafx.controls' \
+  --add-modules 'top.smallfox.maiacb,javafx.controls' \
   --output 'C:\winimg'
 
-echo "[wine] jpackage app-image -> C:\out\MaiAwb (+MaiAwb.exe)"
+echo "[wine] jpackage app-image -> C:\out\MaiAcb (+MaiAcb.exe)"
 wine 'Z:\work\winjdk\jdk\bin\jpackage.exe' \
   --type app-image \
   --runtime-image 'C:\winimg' \
   --module-path 'Z:\work\app;Z:\work\jfx-win' \
-  --module 'com.maiawb/com.maiawb.MaiAwbApp' \
-  --name MaiAwb --app-version "$JPACKAGE_VERSION" \
+  --module 'top.smallfox.maiacb/top.smallfox.maiacb.MaiAcbApp' \
+  --name MaiAcb --app-version "$JPACKAGE_VERSION" \
   --dest 'C:\out' --temp 'C:\tmp'
 
 echo WINE_BUNDLE_OK
@@ -117,12 +117,12 @@ docker run --rm \
   | grep -v "Attempt to"
 
 # 构建产物在 wine C: 盘，拷回宿主
-rm -rf "$WORK/out/MaiAwb"
-cp -r "$WORK/.wine/drive_c/out/MaiAwb" "$WORK/out/"
+rm -rf "$WORK/out/MaiAcb"
+cp -r "$WORK/.wine/drive_c/out/MaiAcb" "$WORK/out/"
 
 echo "==> [5/5] 打包 zip（7z）"
-ZIP_NAME="MaiAwb-${APP_VERSION}-windows-x64.zip"
+ZIP_NAME="MaiAcb-${APP_VERSION}-windows-x64.zip"
 rm -f "$WORK/out/$ZIP_NAME"
-( cd "$WORK/out" && 7z a -tzip -mx=5 -bso0 -bsp0 "$ZIP_NAME" MaiAwb >/dev/null )
+( cd "$WORK/out" && 7z a -tzip -mx=5 -bso0 -bsp0 "$ZIP_NAME" MaiAcb >/dev/null )
 echo "完成：$WORK/out/$ZIP_NAME"
-ls -la "$WORK/out/MaiAwb/MaiAwb.exe" "$WORK/out/$ZIP_NAME"
+ls -la "$WORK/out/MaiAcb/MaiAcb.exe" "$WORK/out/$ZIP_NAME"

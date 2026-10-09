@@ -1,6 +1,6 @@
-package com.maiawb.core.cri;
+package top.smallfox.maiacb.core.cri;
 
-import com.maiawb.core.io.DataStream;
+import top.smallfox.maiacb.core.io.DataStream;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;

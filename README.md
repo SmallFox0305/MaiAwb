@@ -1,4 +1,4 @@
-# MaiAwb 舞萌音频数据预览片段追加工具
+# MaiAcb 舞萌音频数据预览片段追加工具
 
 > **本软件全程由 AI 制作**：全部代码、界面与构建脚本均由 AI 编写与维护。
 > 采用 [MIT 开源协议](LICENSE) 发布，版权归 Small_Fox 所有。
@@ -7,8 +7,8 @@
 **AWB 为唯一输入**：工具内部从 HCA 头自提取音频参数（采样率 / 声道 / 样本数）驱动 ACB 生成，
 用户无需提交任何音频文件，也不内置 HCA→PCM 解码。
 
-- 当前版本：**26.1-A**
-- 版本号规则：`YY.PATCH-LETTER` → `26` = 年份，`1` = 补丁号，`A` = 迭代版本字母
+- 当前版本：**26.2-A**
+- 版本号规则：`YY.PATCH-LETTER` → `26` = 年份，`PATCH` = 补丁号（当前为 2），`LETTER` = 迭代版本字母（当前为 A）
 
 ---
 
@@ -22,7 +22,7 @@
 
 ## 快速开始（GUI）
 
-1. 运行 `MaiAwb`（Windows：解压 `MaiAwb-26.1-A-windows-x64.zip`，双击 `MaiAwb.exe`）
+1. 运行 `MaiAcb`（Windows：解压 `MaiAcb-26.2-A-windows-x64.zip`，双击 `MaiAcb.exe`）
 2. 选择 AWB 音频容器（AFS2 / AWB，必选）
 3. 输入预览循环区间（秒，回车确认）
 4. 点击「生成」→ 输出 `.acb` 与配对 `.awb`，部署到官机 `SoundData/`
@@ -30,19 +30,19 @@
 ## 快速开始（CLI）
 
 ```
-java -m com.maiawb/com.maiawb.cli.Main <awb> <out.acb> [loopStartSec] [loopEndSec] [--verify]
+java -m top.smallfox.maiacb/top.smallfox.maiacb.cli.Main <awb> <out.acb> [loopStartSec] [loopEndSec] [--verify]
 ```
 
 - `loopStartSec` / `loopEndSec`：循环区间（秒），默认 0 / 末位
 - `--verify`：输出后回读 ACB 校验各表（Cue / TrackEvent / StreamAwbHash）
-- 示例：`java -m com.maiawb/com.maiawb.cli.Main music006000.awb out.acb 0 8 --verify`
+- 示例：`java -m top.smallfox.maiacb/top.smallfox.maiacb.cli.Main music006000.awb out.acb 0 8 --verify`
 
 ## 构建
 
 | 目标 | 方式 |
 |---|---|
 | Linux 本机自包含镜像 | `mvn package` + javafx jlink → `target/image/` |
-| Windows x64 exe（在 Linux 交叉打包） | `scripts/build-windows-exe.sh` → `out/MaiAwb/MaiAwb.exe` + zip |
+| Windows x64 exe（在 Linux 交叉打包） | `scripts/build-windows-exe.sh` → `out/MaiAcb/MaiAcb.exe` + zip |
 
 Windows 打包原理：Docker 内 Wine 运行 **Oracle JDK 27**（含 jmods）的 jlink + jpackage
 `--type app-image`，JavaFX 使用 `-win` classifier 原生模块。详见 `docs/AI_MAINTENANCE.md`。
@@ -50,8 +50,8 @@ Windows 打包原理：Docker 内 Wine 运行 **Oracle JDK 27**（含 jmods）�
 ## 目录速览
 
 ```
-src/main/java/com/maiawb/
-├── MaiAwbApp.java          GUI 主入口
+src/main/java/top/smallfox/maiacb/
+├── MaiAcbApp.java          GUI 主入口
 ├── NativeFileDialog.java   kdialog/zenity/JavaFX 文件对话框桥接
 ├── cli/Main.java           CLI 入口
 ├── core/CriUtils.java      AWB-only 核心：AudioSpec / extractAudioSpec / createAcbWithPreview

@@ -1,4 +1,4 @@
-package com.maiawb.core.io;
+package top.smallfox.maiacb.core.io;
 
 import java.nio.charset.Charset;
 

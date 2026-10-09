@@ -1,8 +1,8 @@
-package com.maiawb.core;
+package top.smallfox.maiacb.core;
 
-import com.maiawb.core.cri.CriRow;
-import com.maiawb.core.cri.CriTable;
-import com.maiawb.core.cri.CriTableWriterSettings;
+import top.smallfox.maiacb.core.cri.CriRow;
+import top.smallfox.maiacb.core.cri.CriTable;
+import top.smallfox.maiacb.core.cri.CriTableWriterSettings;
 
 import java.io.IOException;
 import java.io.InputStream;

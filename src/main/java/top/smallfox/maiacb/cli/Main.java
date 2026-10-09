@@ -1,7 +1,7 @@
-package com.maiawb.cli;
+package top.smallfox.maiacb.cli;
 
-import com.maiawb.core.AwbNormalizer;
-import com.maiawb.core.CriUtils;
+import top.smallfox.maiacb.core.AwbNormalizer;
+import top.smallfox.maiacb.core.CriUtils;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 /**
  * 命令行入口（调试/脚本化使用）。
  * <p>
- * 用法：java -m com.maiawb/com.maiawb.cli.Main &lt;awb&gt; &lt;out.acb&gt; [loopStart秒] [loopEnd秒] [--verify]
+ * 用法：java -m top.smallfox.maiacb/top.smallfox.maiacb.cli.Main &lt;awb&gt; &lt;out.acb&gt; [loopStart秒] [loopEnd秒] [--verify]
  * <p>
  * 行为：
  * <ol>
@@ -88,7 +88,7 @@ public final class Main {
 
     /** 用本工具的 CriTable 读写回环校验输出 ACB 的关键字段。 */
     private static void verify(Path out) throws IOException {
-        com.maiawb.core.cri.CriTable root = new com.maiawb.core.cri.CriTable();
+        top.smallfox.maiacb.core.cri.CriTable root = new top.smallfox.maiacb.core.cri.CriTable();
         root.load(Files.readAllBytes(out));
         System.out.println("[verify] root tableName=" + root.tableName()
                 + " fields=" + root.fields().size()
@@ -96,23 +96,23 @@ public final class Main {
 
         var row0 = root.rows().get(0);
         System.out.println("[verify]   CueTable.Length = "
-                + ((com.maiawb.core.cri.CriTable) com.maiawb.core.CriUtils.getTable(row0, "CueTable"))
+                + ((top.smallfox.maiacb.core.cri.CriTable) top.smallfox.maiacb.core.CriUtils.getTable(row0, "CueTable"))
                         .rows().get(0).get("Length"));
-        var tet = com.maiawb.core.CriUtils.getTable(row0, "TrackEventTable");
+        var tet = top.smallfox.maiacb.core.CriUtils.getTable(row0, "TrackEventTable");
         byte[] cmd = (byte[]) tet.rows().get(1).get("Command");
         System.out.println("[verify]   TrackEventTable.Command[" + cmd.length + "] = "
                 + java.util.HexFormat.of().formatHex(cmd));
         System.out.println("[verify]   StreamAwbHash.Hash = "
                 + java.util.HexFormat.of().formatHex(
-                        (byte[]) com.maiawb.core.CriUtils.getTable(row0, "StreamAwbHash").rows().get(0).get("Hash")));
-        var wft = com.maiawb.core.CriUtils.getTable(row0, "WaveformTable");
+                        (byte[]) top.smallfox.maiacb.core.CriUtils.getTable(row0, "StreamAwbHash").rows().get(0).get("Hash")));
+        var wft = top.smallfox.maiacb.core.CriUtils.getTable(row0, "WaveformTable");
         short sr = (Short) wft.rows().get(0).get("SamplingRate");
         System.out.println("[verify]   WaveformTable.SamplingRate(bytes) = "
                 + String.format("0x%04X", sr & 0xFFFF) + " (" + (sr & 0xFFFF) + " Hz)");
         int numSamples = (Integer) wft.rows().get(0).get("NumSamples");
         System.out.println("[verify]   WaveformTable.NumSamples   = "
                 + String.format("0x%08X", numSamples) + "  <- 只有低字节由 (byte)sampleCount 写入，语义符合 C#");
-        byte[] hdr = (byte[]) com.maiawb.core.CriUtils.getTable(row0, "StreamAwbAfs2Header").rows().get(0).get("Header");
+        byte[] hdr = (byte[]) top.smallfox.maiacb.core.CriUtils.getTable(row0, "StreamAwbAfs2Header").rows().get(0).get("Header");
         System.out.println("[verify]   StreamAwbAfs2Header.Header = " + hdr.length + " bytes");
     }
 }

@@ -1,7 +1,7 @@
-package com.maiawb;
+package top.smallfox.maiacb;
 
-import com.maiawb.core.AwbNormalizer;
-import com.maiawb.core.CriUtils;
+import top.smallfox.maiacb.core.AwbNormalizer;
+import top.smallfox.maiacb.core.CriUtils;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
@@ -38,7 +38,7 @@ import java.util.List;
  * 文件选择优先走系统原生对话框（Linux 下 kdialog=KDE/Dolphin 同款，其次 zenity），
  * 无原生工具时回退 JavaFX 默认选择器。
  */
-public class MaiAwbApp extends Application {
+public class MaiAcbApp extends Application {
 
     private final TextField awbField = new TextField();
     private final TextField loopStartField = new TextField("10.0");
@@ -61,7 +61,7 @@ public class MaiAwbApp extends Application {
         loopStartField.textProperty().addListener((obs, a, b) -> markLoopDirty());
         loopEndField.textProperty().addListener((obs, a, b) -> markLoopDirty());
 
-        stage.setTitle("MaiAwb 舞萌音频数据预览片段追加工具 v26.1-A");
+        stage.setTitle("MaiAcb 舞萌音频数据预览片段追加工具 v26.2-A");
         stage.setMinWidth(760);
         stage.setMinHeight(560);
 
@@ -86,11 +86,11 @@ public class MaiAwbApp extends Application {
         HBox bar = new HBox(12);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.setPadding(new Insets(10, 14, 8, 14));
-        Label brand = new Label("MaiAwb 舞萌音频数据预览片段追加工具");
+        Label brand = new Label("MaiAcb 舞萌音频数据预览片段追加工具");
         brand.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
         Region filler = new Region();
         HBox.setHgrow(filler, Priority.ALWAYS);
-        Label ver = new Label("v26.1-A");
+        Label ver = new Label("v26.2-A");
         ver.setStyle("-fx-text-fill: #444444;");
         bar.getChildren().addAll(brand, filler, ver);
         return bar;
