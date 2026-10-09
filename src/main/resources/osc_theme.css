@@ -1,0 +1,163 @@
+/*
+ * 工业控制台 (toC) 风格深色主题。
+ */
+.root {
+    -fx-background-color: #121417;
+    -fx-font-family: "Consolas", "Monaco", "Noto Sans Mono CJK SC", "DejaVu Sans Mono", monospace;
+    -fx-font-size: 13px;
+}
+
+/* 顶部标题栏 */
+.title-bar {
+    -fx-background-color: #1c2025;
+    -fx-border-color: transparent transparent #2a3036 transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 10 14 10 14;
+}
+.title-brand {
+    -fx-text-fill: #ffb000;
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+}
+.title-sub {
+    -fx-text-fill: #7d8892;
+    -fx-font-size: 12px;
+}
+.title-filler {
+    -fx-background-color: #1c2025;
+}
+.led {
+    -fx-background-radius: 50%;
+    -fx-min-width: 12;
+    -fx-min-height: 12;
+    -fx-max-width: 12;
+    -fx-max-height: 12;
+}
+
+/* 主面板 */
+.panel {
+    -fx-background-color: #181c21;
+    -fx-border-color: #2a3036;
+    -fx-border-width: 1;
+    -fx-background-radius: 3;
+    -fx-border-radius: 3;
+    -fx-padding: 14;
+}
+.section-title {
+    -fx-text-fill: #ffb000;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 0 0 6 0;
+}
+.form-label {
+    -fx-text-fill: #9aa7b1;
+    -fx-font-size: 12px;
+}
+.field {
+    -fx-background-color: #101318;
+    -fx-text-fill: #e6ecf1;
+    -fx-border-color: #333b43;
+    -fx-border-width: 1;
+    -fx-padding: 6 8 6 8;
+    -fx-background-radius: 2;
+}
+.field:focused {
+    -fx-border-color: #ffb000;
+}
+.field-num {
+    -fx-pref-column-count: 8;
+}
+.action-button {
+    -fx-background-color: #2a3036;
+    -fx-text-fill: #e6ecf1;
+    -fx-border-color: #3d4650;
+    -fx-border-width: 1;
+    -fx-padding: 8 18 8 18;
+    -fx-cursor: hand;
+}
+.action-button:hover {
+    -fx-background-color: #343c45;
+}
+.action-button:pressed {
+    -fx-background-color: #23282e;
+}
+.accent-button {
+    -fx-background-color: #ffb000;
+    -fx-text-fill: #121417;
+    -fx-font-weight: bold;
+    -fx-border-color: #ffc844;
+    -fx-border-width: 1;
+    -fx-padding: 10 22 10 22;
+    -fx-cursor: hand;
+}
+.accent-button:hover {
+    -fx-background-color: #ffc033;
+}
+.accent-button:pressed {
+    -fx-background-color: #d99500;
+}
+.accent-button:disabled {
+    -fx-background-color: #6b5d33;
+    -fx-text-fill: #3a3320;
+}
+
+/* 循环区间「确认」按钮 */
+.confirm-button {
+    -fx-background-color: #ffb000;
+    -fx-text-fill: #121417;
+    -fx-font-weight: bold;
+    -fx-border-color: #ffc844;
+    -fx-border-width: 1;
+    -fx-padding: 6 16 6 16;
+    -fx-cursor: hand;
+}
+.confirm-button:hover {
+    -fx-background-color: #ffc033;
+}
+.confirm-button:pressed {
+    -fx-background-color: #d99500;
+}
+
+/* 循环区间状态指示 */
+.loop-pending {
+    -fx-text-fill: #7d8892;
+    -fx-font-size: 11px;
+}
+.loop-confirmed {
+    -fx-text-fill: #6fcf97;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+.loop-error {
+    -fx-text-fill: #ef6f6f;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+/* 日志区 */
+.log-area {
+    -fx-background-color: #0c0f12;
+    -fx-text-fill: #b8c4cd;
+    -fx-border-color: #2a3036;
+    -fx-border-width: 1;
+    -fx-font-family: "JetBrains Mono", "Consolas", "Noto Sans Mono CJK SC", "DejaVu Sans Mono", monospace;
+    -fx-font-size: 12px;
+}
+
+/* 状态栏 */
+.status-bar {
+    -fx-background-color: #0c0f12;
+    -fx-border-color: transparent transparent transparent transparent;
+    -fx-border-width: 0;
+    -fx-padding: 6 14 6 14;
+}
+.status-text {
+    -fx-text-fill: #7d8892;
+    -fx-font-size: 11px;
+}
+.status-ok {
+    -fx-text-fill: #6fcf97;
+}
+.status-err {
+    -fx-text-fill: #ef6f6f;
+}
